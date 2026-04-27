@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash-8b",
+        model_name="gemini-2.0-flash-lite",
         system_instruction=SYSTEM_PROMPT
     )
     print("Gemini ulandi!")
