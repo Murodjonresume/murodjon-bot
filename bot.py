@@ -1,14 +1,14 @@
 import logging
 import os
-import google.generativeai as genai
+from groq import Groq
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8760920363:AAE4YZyh6gyy07yf32Cwkq4sIMPSLWWxYY0")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDmTul8k7VnsqQu5PyCIFo7O-gFnLSqvDY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 print(f"TELEGRAM_TOKEN: {TELEGRAM_TOKEN[:20]}...")
-print(f"GEMINI_API_KEY: {GEMINI_API_KEY[:20]}...")
+print(f"GROQ_API_KEY: {GROQ_API_KEY[:20]}...")
 
 SYSTEM_PROMPT = """Sen Murodjon ismli shaxsiy yordamchisan. Murodjonning nomidan odamlarga javob berasan.
 
@@ -30,17 +30,10 @@ Qoidalar:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash-lite",
-        system_instruction=SYSTEM_PROMPT
-    )
-    print("Gemini ulandi!")
-except Exception as e:
-    print(f"Gemini xato: {e}")
+client = Groq(api_key=GROQ_API_KEY)
+print("Groq ulandi!")
 
-chat_sessions = {}
+chat_histories = {}
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -56,13 +49,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-    try:
-        if user_id not in chat_sessions:
-            chat_sessions[user_id] = model.start_chat(history=[])
+    if user_id not in chat_histories:
+        chat_histories[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-        chat = chat_sessions[user_id]
-        response = chat.send_message(f"{user_name} yozdi: {user_text}")
-        reply = response.text
+    chat_histories[user_id].append({"role": "user", "content": f"{user_name} yozdi: {user_text}"})
+
+    if len(chat_histories[user_id]) > 20:
+        chat_histories[user_id] = [chat_histories[user_id][0]] + chat_histories[user_id][-19:]
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=chat_histories[user_id],
+            max_tokens=500,
+        )
+        reply = response.choices[0].message.content
+        chat_histories[user_id].append({"role": "assistant", "content": reply})
         await message.reply_text(reply)
 
     except Exception as e:
