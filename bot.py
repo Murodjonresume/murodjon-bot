@@ -4,11 +4,12 @@ import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-# --- SOZLAMALAR ---
-TELEGRAM_TOKEN = "8760920363:AAE4YZyh6gyy07yf32Cwkq4sIMPSLWWxYY0"
-GEMINI_API_KEY = "AIzaSyDmTul8k7VnsqQu5PyCIFo7O-gFnLSqvDY"
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8760920363:AAE4YZyh6gyy07yf32Cwkq4sIMPSLWWxYY0")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDmTul8k7VnsqQu5PyCIFo7O-gFnLSqvDY")
 
-# --- MURODJON PERSONA ---
+print(f"TELEGRAM_TOKEN: {TELEGRAM_TOKEN[:20]}...")
+print(f"GEMINI_API_KEY: {GEMINI_API_KEY[:20]}...")
+
 SYSTEM_PROMPT = """Sen Murodjon ismli shaxsiy yordamchisan. Murodjonning nomidan odamlarga javob berasan.
 
 Murodjon haqida:
@@ -29,14 +30,16 @@ Qoidalar:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Gemini sozlash
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction=SYSTEM_PROMPT
-)
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=SYSTEM_PROMPT
+    )
+    print("Gemini ulandi!")
+except Exception as e:
+    print(f"Gemini xato: {e}")
 
-# Har bir foydalanuvchi uchun suhbat tarixi
 chat_sessions = {}
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -44,7 +47,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name or "do'stim"
     message = update.message
 
-    # Faqat matn xabarlarini qabul qil
     if not message.text:
         await message.reply_text("Hozircha faqat matn xabarlariga javob bera olaman 😊")
         return
@@ -52,32 +54,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = message.text
     logger.info(f"[{user_name}]: {user_text}")
 
-    # Typing indicator
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
     try:
-        # Foydalanuvchi uchun chat session yarat yoki mavjudini ol
         if user_id not in chat_sessions:
             chat_sessions[user_id] = model.start_chat(history=[])
 
         chat = chat_sessions[user_id]
         response = chat.send_message(f"{user_name} yozdi: {user_text}")
         reply = response.text
-
         await message.reply_text(reply)
 
     except Exception as e:
         logger.error(f"Xato: {e}")
-        await message.reply_text("Hozir biroz band ekanman, bir ozdan keyin yozing 🙏")
+        print(f"Javob xatosi: {e}")
+        await message.reply_text(f"Xato: {str(e)[:200]}")
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Ovozli xabar uchun rahmat! Hozircha faqat matn orqali javob bera olaman. "
-        "Xabaringizni matn ko'rinishida yozsangiz javob beraman 😊"
+        "Ovozli xabar uchun rahmat! Hozircha faqat matn orqali javob bera olaman 😊"
     )
 
 def main():
-    print("✅ Bot ishga tushdi!")
+    print("Bot ishga tushdi!")
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
