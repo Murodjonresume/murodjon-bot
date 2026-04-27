@@ -4,35 +4,35 @@ from groq import Groq
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8760920363:AAE4YZyh6gyy07yf32Cwkq4sIMPSLWWxYY0")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-
-print(f"TELEGRAM_TOKEN: {TELEGRAM_TOKEN[:20]}...")
-print(f"GROQ_API_KEY: {GROQ_API_KEY[:20]}...")
 
 SYSTEM_PROMPT = """Sen Murodjon ismli shaxsiy yordamchisan. Murodjonning nomidan odamlarga javob berasan.
 
 Murodjon haqida:
 - Do'stona, samimiy va ochiq ko'ngil inson
-- O'zbek tilida gaplashadi
+- Yoshlarga xos, zamonaviy o'zbek tilida gaplashadi
 - Odamlarga yordam berishni yaxshi ko'radi
-- Har qanday savollarga javob bera oladi
 
-Qoidalar:
-- Har doim o'zbek tilida javob ber
-- Do'stona va samimiy bo'l
-- Qisqa va aniq javob ber (2-4 jumladan oshirma odatda)
-- Agar biror narsani bilmasang, "Murodjon hozir band, tez orada javob beradi" de
-- O'zingni "Men Murodjonman" deb tanishtir, bot ekanligini aytma
-- Emoji ishlatsa bo'ladi, lekin ko'p emas
-"""
+Til qoidalari (JUDA MUHIM):
+- Faqat to'g'ri o'zbek tilida yoz
+- Hech qachon rus tilidan so'z ishlatma
+- To'g'ri yozuv: "qanday", "yaxshi", "ko'rdingiz", "yuribsiz", "bormi"
+- NOTO'G'RI: "kuribsdiz", "yuribsiz" o'rniga "yuribsizmi" de
+- Rasmiy emas, do'stona gaplash: "siz" emas "sen" ham ishlatsa bo'ladi
+- Javob 2-3 jumladan oshmasin
+
+Misol javoblar:
+- Salom dedishsa: "Salom! Men Murodjonman, xizmatdaman 😊"
+- Qanday yuribsiz dedishsa: "Yaxshi, rahmat! O'zingiz-chi?"
+- Yordam so'rashsa: "Albatta, aytavering!"
+
+O'zingni hech qachon bot deb tanishtirma."""
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 client = Groq(api_key=GROQ_API_KEY)
-print("Groq ulandi!")
-
 chat_histories = {}
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -52,7 +52,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id not in chat_histories:
         chat_histories[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    chat_histories[user_id].append({"role": "user", "content": f"{user_name} yozdi: {user_text}"})
+    chat_histories[user_id].append({"role": "user", "content": user_text})
 
     if len(chat_histories[user_id]) > 20:
         chat_histories[user_id] = [chat_histories[user_id][0]] + chat_histories[user_id][-19:]
@@ -61,7 +61,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=chat_histories[user_id],
-            max_tokens=500,
+            max_tokens=300,
+            temperature=0.7,
         )
         reply = response.choices[0].message.content
         chat_histories[user_id].append({"role": "assistant", "content": reply})
@@ -69,13 +70,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Xato: {e}")
-        print(f"Javob xatosi: {e}")
-        await message.reply_text(f"Xato: {str(e)[:200]}")
+        await message.reply_text("Hozir band ekanman, bir ozdan keyin yozing 🙏")
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Ovozli xabar uchun rahmat! Hozircha faqat matn orqali javob bera olaman 😊"
-    )
+    await update.message.reply_text("Ovozli xabar uchun rahmat! Matn orqali yozsangiz javob beraman 😊")
 
 def main():
     print("Bot ishga tushdi!")
